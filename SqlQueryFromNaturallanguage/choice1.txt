@@ -1,0 +1,47 @@
+To write a valid SQL query to find the monthly turnover per family and supplier for the last 5 years in Microsoft SQL Server, you need to have a clear understanding of your database schema, specifically the tables involved and the relevant fields. I'll assume you have a `Sales` table (or similar) that includes columns for order date, family, supplier, and turnover amount. Here is an example query that accomplishes this:
+
+```sql
+WITH MonthlyTurnover AS (
+    SELECT 
+        DATEPART(YEAR, OrderDate) AS SalesYear,
+        DATEPART(MONTH, OrderDate) AS SalesMonth,
+        Family,
+        Supplier,
+        SUM(Turnover) AS TotalTurnover
+    FROM 
+        Sales
+    WHERE 
+        OrderDate >= DATEADD(YEAR, -5, GETDATE())  -- Last 5 years
+    GROUP BY 
+        DATEPART(YEAR, OrderDate),
+        DATEPART(MONTH, OrderDate),
+        Family,
+        Supplier
+)
+SELECT 
+    SalesYear,
+    SalesMonth,
+    Family,
+    Supplier,
+    TotalTurnover
+FROM 
+    MonthlyTurnover
+ORDER BY 
+    SalesYear, 
+    SalesMonth, 
+    Family, 
+    Supplier;
+```
+
+### Explanation:
+1. **Common Table Expression (CTE)**: The `WITH MonthlyTurnover AS (...)` part creates a CTE that calculates the total turnover per family and supplier per month and year.
+   
+2. **DATEPART Function**: The `DATEPART(YEAR, OrderDate)` and `DATEPART(MONTH, OrderDate)` functions extract the year and month from the `OrderDate`.
+
+3. **SUM Function**: The `SUM(Turnover)` aggregates the turnover for each combination of year, month, family, and supplier.
+
+4. **WHERE Clause**: The condition `OrderDate >= DATEADD(YEAR, -5, GETDATE())` filters the records to include only those from the last 5 years.
+
+5. **Final SELECT Statement**: This retrieves the aggregated data and orders it by year, month, family, and supplier.
+
+Make sure to adjust the table name and column names (`Sales`, `OrderDate`, `Family`, `Supplier`, `Turnover`) based on your actual database schema.

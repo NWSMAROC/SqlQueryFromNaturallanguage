@@ -1,0 +1,261 @@
+﻿@page "/"
+@rendermode InteractiveServer
+@using static ComponentEnums
+@using Models
+@using System.Net.Http.Headers
+@inject IJSRuntime JS
+
+ 
+<script>
+    window.showLocalMsg = (msg) => {
+        //
+        try {
+            var div = document.getElementById("msg");
+            div.innerText = msg;
+            return "true";
+        }
+        catch (e) {
+            return "false";
+        }
+    };
+</script>
+<h1 class=" text-center">SQL Query From Natural Language</h1>
+<div class="row">
+    <div class="col-6 border bg-secondary">
+        <h2 class="text-center">Input Area</h2>
+    </div>
+    <div class="col-6 border bg-info" >
+        <h2 class="text-center">Output Area</h2>
+    </div>
+</div>
+ 
+<div class="row mb-2">
+    <div class="col-6 border">
+        <fieldset class="mb-2">
+            <legend>Api Key</legend>
+
+            <div class="input-group">
+                <input @bind="apikey" class="form-control" placeholder="Enter your Api Key" type="@input_type" />
+                <button class="btn btn-outline-primary" type="button" @onclick="@( () => ShowHideKey())">@viewhide</button>
+            </div>
+        </fieldset>
+        <fieldset class="mb-2">
+            <legend>Kind of Database</legend>
+            @foreach (var kind in Enum.GetValues<KindOfDataBase>())
+            {
+                <InputRadioGroup @bind-Value="kindofdataBase">
+                    <label class="form-label p-2 d-inline">
+                        <InputRadio Value="kind" />
+                        @kind.ToString()
+                    </label>
+                </InputRadioGroup>
+
+            }
+        </fieldset>
+        <fieldset class="mb-2">
+            <legend>Natural Language Text</legend>
+
+            <div class="input-group">
+                <textarea @bind="text" class="form-control" placeholder="Enter your text" rows="5" />
+            </div>
+        </fieldset>
+        <button type="submit" @onclick="@( () => Submit())" class="btn btn-primary">Submit</button>
+    </div>
+    <div class="col-6 border">
+        <div class="row">
+            <div class="col-10 p-2">
+                <fieldset class="mb-2">
+                    <legend class="d-inline">SQL Query</legend>
+                </fieldset>
+            </div>
+            <div class="col-2 p-2">
+                <button class="btn btn-outline-primary" type="button" hidden="@hidecopy"  onclick="navigator.clipboard.writeText('@sql')">Copy</button>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-12 border">
+                @sql
+            </div>
+        </div>
+        
+    </div>
+</div>
+<div class="row">
+    <div class="col-12" id="msg">
+        @status
+    </div>
+</div>
+
+
+
+@code {
+
+
+    [SupplyParameterFromForm]
+    public KindOfDataBase? Model { get; set; }
+
+    private string apikey = "";
+    private string text = "";
+    private KindOfDataBase kindofdataBase = KindOfDataBase.Unknown;
+    private string sql = "";
+    private string status = "";
+    private string input_type="password";
+    private string viewhide = "View";
+    private bool hidecopy = true;
+    protected override void OnInitialized() => Model ??= new();
+    
+    private async Task ShowMsg(string msg)
+    {
+        string res = new(await JS.InvokeAsync<string>("showLocalMsg", msg));
+    }
+    private  void ShowHideKey()
+    {
+        if (input_type == "password")
+        {
+            input_type="text";
+            viewhide = "Hide";
+        }
+        else
+        {
+            input_type = "password";
+            viewhide = "View";
+        }
+    }
+    private async Task Submit()
+    {
+        hidecopy = true;
+        status = "Processing in progress. Please wait.";
+        sql = "";
+        await ShowMsg(status);
+        Message message = new Message
+            {
+                role = "user",
+                content = text
+            };
+        switch (kindofdataBase)
+        {
+            case KindOfDataBase.Oracle:
+                message.content = $"Write a valid Oracle query to find {text}";
+                break;
+            case KindOfDataBase.Postgres:
+                message.content = $"Write a valid Postgres query to find {text}";
+                break;
+            case KindOfDataBase.SQLServer:
+                message.content = $"Write a valid Microsoft SQL Server query to find {text}";
+                break;
+            case KindOfDataBase.MySQL:
+                message.content = $"Write a valid MySQL query to find {text}";
+                break;
+            case KindOfDataBase.Unknown:
+                message.content = $"Write a valid SQL query to find {text}";
+                break;
+        }
+        List<Message> messages = new List<Message>();
+        messages.Add(message);
+        Body body = new Body
+            {
+                model = "gpt-4o-mini",
+                messages = messages
+            };
+
+        Models.ApiCall apicall = new Models.ApiCall()
+            {
+                apikey = apikey,
+                baseAddress = "https://api.openai.com",
+                request = "/v1/chat/completions",
+                body = body
+            };
+        
+        using (HttpClient client = new HttpClient())
+        {
+            OpenIAResponse? response = new OpenIAResponse();
+            client.BaseAddress = new Uri(apicall.baseAddress);
+            client.DefaultRequestHeaders.Accept.Clear();
+
+            client.DefaultRequestHeaders.Accept.Add(
+            new MediaTypeWithQualityHeaderValue("application/json"));
+            client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", apicall.apikey);
+
+            var result = client.PostAsJsonAsync(apicall.request, body).Result;
+            if (result.IsSuccessStatusCode)
+            {
+                await ShowMsg("result.IsSuccessStatusCode");
+                var readTask = result.Content.ReadFromJsonAsync<OpenIAResponse>();
+                readTask.Wait();
+                response = readTask.Result;
+                if (response == null)
+                {
+                    status = "No response!";
+                    await ShowMsg(status);
+                    return ;
+                }
+
+                if (response.error == null)
+                {
+                    // No Error
+                    try
+                    {
+                        if (response.choices == null)
+                        {
+                            status = "No Choice returned !";
+                            await ShowMsg(status);
+                            return ;
+                        }
+                        int i = 0;
+                        foreach (Choice choice in response.choices)
+                        {
+                            i++;
+                            if (choice.message == null)
+                            {
+                            }
+                            else
+                            {
+                                var choicefilepath = Path.Combine(Directory.GetCurrentDirectory(), $"choice{i}.txt");
+                                File.WriteAllText(choicefilepath, choice.message.content);
+                                string[] ss = choice.message.content.Split("```", StringSplitOptions.RemoveEmptyEntries);
+                                sql = "";
+                                foreach (string s in ss)
+                                {
+                                    if (s.StartsWith("sql"))
+                                    {
+                                        sql = s; break;
+                                    }
+                                }
+                                if (sql.Length > 3)
+                                {
+                                    sql = sql.Substring(3);
+                                }
+                            }
+                        }
+                        hidecopy = false;
+                        status = "OK";
+                        await ShowMsg(status);
+                        return ;
+                    }
+                    catch (Exception ex)
+                    {
+                        status = $"Exception : {ex.Message}";
+                        await ShowMsg(status);
+                        return ;
+                    }
+                }
+                else
+                {
+                    status = $"{response.error.message}";
+                    await ShowMsg(status);
+                    return ;
+                }
+            }
+            else //web api sent error response
+            {
+                await ShowMsg($"Api Error : {result.StatusCode}");
+                status = $"Api Error : {result.StatusCode}";
+                await ShowMsg(status);
+                return ;
+            }
+        }
+
+
+    }
+}
