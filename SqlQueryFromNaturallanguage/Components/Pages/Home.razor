@@ -211,8 +211,6 @@
                             }
                             else
                             {
-                                var choicefilepath = Path.Combine(Directory.GetCurrentDirectory(), $"choice{i}.txt");
-                                File.WriteAllText(choicefilepath, choice.message.content);
                                 string[] ss = choice.message.content.Split("```", StringSplitOptions.RemoveEmptyEntries);
                                 sql = "";
                                 foreach (string s in ss)
